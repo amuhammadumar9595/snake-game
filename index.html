@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Играй в классическую змейку онлайн бесплатно. Управляй змейкой, собирай еду и ставь рекорды!">
+    <meta name="keywords" content="змейка, игра змейка, snake game, играть онлайн">
+
+    <title>Змейка</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Змейка</h1>
+    <div class="scoreboard">
+        Очки: <span id="score">0</span>
+    </div>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <button id="startBtn">Начать игру</button>
+
+    <script src="script.js"></script>
+</body>
+</html>
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: #222;
+    color: white;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    margin-top: 20px;
+}
+
+.scoreboard {
+    font-size: 20px;
+    margin: 10px 0;
+}
+
+canvas {
+    background: #111;
+    border: 2px solid white;
+    display: block;
+    margin: 0 auto;
+}
+
+button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    font-size: 18px;
+    cursor: pointer;
+}
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const startBtn = document.getElementById('startBtn');
+
+const gridSize = 20;
+let snake, food, dx, dy, score, gameInterval;
+
+startBtn.addEventListener('click', startGame);
+
+function startGame() {
+    snake = [{ x: 200, y: 200 }];
+    food = generateFood();
+    dx = gridSize;
+    dy = 0;
+    score = 0;
+    scoreEl.textContent = score;
+
+    if (gameInterval) clearInterval(gameInterval);
+    gameInterval = setInterval(gameLoop, 100);
+}
+
+function gameLoop() {
+    moveSnake();
+    if (checkCollision()) {
+        endGame();
+        return;
+    }
+    if (eatFood()) {
+        score++;
+        scoreEl.textContent = score;
+        food = generateFood();
+    }
+    drawGame();
+}
+
+function moveSnake() {
+    const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+    snake.unshift(head);
+    if (!eatFood()) snake.pop();
+}
+
+function drawGame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = 'lime';
+    snake.forEach(part => ctx.fillRect(part.x, part.y, gridSize, gridSize));
+
+    ctx.fillStyle = 'red';
+    ctx.fillRect(food.x, food.y, gridSize, gridSize);
+}
+
+function generateFood() {
+    return {
+        x: Math.floor(Math.random() * (canvas.width / gridSize)) * gridSize,
+        y: Math.floor(Math.random() * (canvas.height / gridSize)) * gridSize
+    };
+}
+
+function eatFood() {
+    return snake[0].x === food.x && snake[0].y === food.y;
+}
+
+function checkCollision() {
+    const head = snake[0];
+
+    if (
+        head.x < 0 || head.x >= canvas.width ||
+        head.y < 0 || head.y >= canvas.height
+    ) return true;
+
+    for (let i = 1; i < snake.length; i++) {
+        if (snake[i].x === head.x && snake[i].y === head.y) return true;
+    }
+
+    return false;
+}
+
+function endGame() {
+    clearInterval(gameInterval);
+    alert(`Игра окончена! Ваш счет: ${score}`);
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' && dy === 0) { dx = 0; dy = -gridSize; }
+    if (e.key === 'ArrowDown' && dy === 0) { dx = 0; dy = gridSize; }
+    if (e.key === 'ArrowLeft' && dx === 0) { dx = -gridSize; dy = 0; }
+    if (e.key === 'ArrowRight' && dx === 0) { dx = gridSize; dy = 0; }
+});
