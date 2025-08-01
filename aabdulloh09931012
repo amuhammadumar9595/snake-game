@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Snake</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        h1 {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        .scoreboard {
+            position: absolute;
+            top: 60px;
+            width: 100%;
+            font-size: 18px;
+            color: white;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: transparent;
+        }
+        .controls {
+            position: absolute;
+            top: 90px;
+            width: 100%;
+        }
+        select, button {
+            margin: 5px;
+            padding: 8px 12px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+        }
+        select {
+            background: #333;
+            color: white;
+        }
+        button {
+            background: #00ff88;
+            color: black;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover {
+            background: #00cc66;
+        }
+    </style>
+</head>
+<body>
+    <h1>🐍 Super Snake</h1>
+    <div class="scoreboard">
+        Ball: <span id="score">0</span> | Yuqori ball: <span id="highScore">0</span>
+    </div>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    
+    <div class="controls">
+        <label for="difficulty">Murakkablik:</label>
+        <select id="difficulty">
+            <option value="150">Oson</option>
+            <option value="100">O'rta</option>
+            <option value="70">Qiyin</option>
+        </select>
+        <label for="skin">Skin:</label>
+        <select id="skin">
+            <option value="green">Yashil (Oddiy)</option>
+            <option value="blue">Ko'k (Neon)</option>
+            <option value="rainbow">Kamalak</option>
+        </select>
+        <button id="startBtn">Boshlash</button>
+        <button id="pauseBtn">Pauza</button>
+        <button id="turboBtn">⚡ Turbo</button>
+    </div>
+
+    <script>
+        const gameCanvas = document.getElementById('gameCanvas');
+        const ctx = gameCanvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const turboBtn = document.getElementById('turboBtn');
+        const difficultySelect = document.getElementById('difficulty');
+        const skinSelect = document.getElementById('skin');
+
+        const gridSize = 20;
+        let snake, foods, goldenFood, goldenTimer, dx, dy, score, highScore, gameInterval, isPaused = false, speed, snakeSkin, turboActive = false, obstacles = [], particles = [];
+
+        highScore = localStorage.getItem('snakeHighScore') || 0;
+        highScoreEl.textContent = highScore;
+
+        startBtn.addEventListener('click', startGame);
+        pauseBtn.addEventListener('click', togglePause);
+        turboBtn.addEventListener('mousedown', () => turboActive = true);
+        turboBtn.addEventListener('mouseup', () => turboActive = false);
+
+        function startGame() {
+            snake = [{ x: 200, y: 200 }];
+            foods = generateFoods();
+            obstacles = [];
+            particles = [];
+            goldenFood = null;
+            dx = gridSize;
+            dy = 0;
+            score = 0;
+            isPaused = false;
+            snakeSkin = skinSelect.value;
+            scoreEl.textContent = score;
+            speed = parseInt(difficultySelect.value);
+
+            if (gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(gameLoop, speed);
+
+            setInterval(spawnGoldenFood, 10000);
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            pauseBtn.textContent = isPaused ? "Davom et" : "Pauza";
+        }
+
+        function gameLoop() {
+            if (isPaused) return;
+            moveSnake();
+            if (checkCollision()) {
+                endGame();
+                return;
+            }
+            eatFood();
+            drawGame();
+        }
+
+        function moveSnake() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            if (head.x < 0) head.x = gameCanvas.width - gridSize;
+            if (head.x >= gameCanvas.width) head.x = 0;
+            if (head.y < 0) head.y = gameCanvas.height - gridSize;
+            if (head.y >= gameCanvas.height) head.y = 0;
+
+            snake.unshift(head);
+
+            if (!(foods.some(f => f.x === head.x && f.y === head.y) || (goldenFood && head.x === goldenFood.x && head.y === goldenFood.y))) {
+                snake.pop();
+            }
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+            foods.forEach(food => {
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(food.x + gridSize / 2, food.y + gridSize / 2, gridSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            if (goldenFood) {
+                ctx.fillStyle = 'gold';
+                ctx.beginPath();
+                ctx.arc(goldenFood.x + gridSize / 2, goldenFood.y + gridSize / 2, gridSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = 'gray';
+            obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, gridSize, gridSize));
+
+            snake.forEach((part, index) => {
+                if (snakeSkin === "green") ctx.fillStyle = "lime";
+                if (snakeSkin === "blue") ctx.fillStyle = "cyan";
+                if (snakeSkin === "rainbow") ctx.fillStyle = `hsl(${(index * 20) % 360}, 100%, 50%)`;
+                ctx.fillRect(part.x, part.y, gridSize, gridSize);
+            });
+
+            drawParticles();
+        }
+
+        function generateFoods() {
+            const arr = [];
+            for (let i = 0; i < 3; i++) {
+                arr.push({
+                    x: Math.floor(Math.random() * (gameCanvas.width / gridSize)) * gridSize,
+                    y: Math.floor(Math.random() * (gameCanvas.height / gridSize)) * gridSize
+                });
+            }
+            return arr;
+        }
+
+        function spawnGoldenFood() {
+            goldenFood = {
+                x: Math.floor(Math.random() * (gameCanvas.width / gridSize)) * gridSize,
+                y: Math.floor(Math.random() * (gameCanvas.height / gridSize)) * gridSize
+            };
+            goldenTimer = setTimeout(() => goldenFood = null, 5000);
+        }
+
+        function eatFood() {
+            const head = snake[0];
+            for (let i = 0; i < foods.length; i++) {
+                if (head.x === foods[i].x && head.y === foods[i].y) {
+                    score++;
+                    createParticles(head.x, head.y, 'red');
+                    scoreEl.textContent = score;
+                    if (score > highScore) {
+                        highScore = score;
+                        localStorage.setItem('snakeHighScore', highScore);
+                        highScoreEl.textContent = highScore;
+                    }
+                    foods[i] = {
+                        x: Math.floor(Math.random() * (gameCanvas.width / gridSize)) * gridSize,
+                        y: Math.floor(Math.random() * (gameCanvas.height / gridSize)) * gridSize
+                    };
+                    if (score % 5 === 0) addObstacle();
+                    break;
+                }
+            }
+
+            if (goldenFood && head.x === goldenFood.x && head.y === goldenFood.y) {
+                score += 3;
+                createParticles(head.x, head.y, 'gold');
+                goldenFood = null;
+                clearTimeout(goldenTimer);
+                scoreEl.textContent = score;
+            }
+        }
+
+        function addObstacle() {
+            obstacles.push({
+                x: Math.floor(Math.random() * (gameCanvas.width / gridSize)) * gridSize,
+                y: Math.floor(Math.random() * (gameCanvas.height / gridSize)) * gridSize
+            });
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                particles.push({
+                    x: x + gridSize / 2,
+                    y: y + gridSize / 2,
+                    color: color,
+                    radius: Math.random() * 3,
+                    speedX: (Math.random() - 0.5) * 4,
+                    speedY: (Math.random() - 0.5) * 4,
+                    life: 30
+                });
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach((p, i) => {
+                ctx.beginPath();
+                ctx.fillStyle = p.color;
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                p.x += p.speedX;
+                p.y += p.speedY;
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
+        }
+
+        function checkCollision() {
+            const head = snake[0];
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[i].x === head.x && snake[i].y === head.y) return true;
+            }
+            for (let obs of obstacles) {
+                if (obs.x === head.x && obs.y === head.y) return true;
+            }
+            return false;
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            alert(`O'yin tugadi! Ball: ${score}`);
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp' && dy === 0) { dx = 0; dy = -gridSize; }
+            if (e.key === 'ArrowDown' && dy === 0) { dx = 0; dy = gridSize; }
+            if (e.key === 'ArrowLeft' && dx === 0) { dx = -gridSize; dy = 0; }
+            if (e.key === 'ArrowRight' && dx === 0) { dx = gridSize; dy = 0; }
+        });
+
+        setInterval(() => {
+            if (turboActive && !isPaused) {
+                moveSnake();
+                eatFood();
+                drawGame();
+            }
+        }, 30);
+    </script>
+</body>
+</html>
